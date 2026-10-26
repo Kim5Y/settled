@@ -1,0 +1,171 @@
+// use prisma-8
+// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.
+
+namespace public {
+  model Orders {
+    id            Uuid                 @id(map: "orders_pkey") @default(sql`gen_random_uuid()`)
+    reference     String               @unique(map: "orders_reference_key")
+    customerEmail String               @map("customer_email")
+    customerName  String?              @map("customer_name")
+    amountMinor   BigInt               @map("amount_minor")
+    currency      Char(3)
+    status        pg.enum(OrderStatus) @default("pending")
+    paidAt        TimestamptzString?   @map("paid_at")
+    metadata      Jsonb                @default(json`{}`)
+    createdAt     TimestamptzString    @default(now()) @map("created_at")
+    updatedAt     TimestamptzString    @default(now()) @map("updated_at")
+    payments      Payments[]
+
+    @@index([customerEmail], map: "orders_customer_email_idx")
+    @@index([status, createdAt], map: "orders_status_created_idx")
+    @@check(expression: sql`(amount_minor > 0)`, map: "orders_amount_minor_check")
+    @@check(expression: sql`((currency)::text = upper((currency)::text))`, map: "orders_currency_check")
+    @@check(expression: sql`((status = ANY (ARRAY['paid'::order_status, 'partially_refunded'::order_status, 'refunded'::order_status])) = (paid_at IS NOT NULL))`, map: "orders_paid_at_matches_status")
+    @@map("orders")
+  }
+
+  model Payments {
+    id                     Uuid                     @id(map: "payments_pkey") @default(sql`gen_random_uuid()`)
+    orderId                Uuid                     @map("order_id")
+    provider               pg.enum(PaymentProvider)
+    providerReference      String                   @map("provider_reference")
+    providerTransactionId  String?                  @map("provider_transaction_id")
+    idempotencyKey         String?                  @map("idempotency_key")
+    amountMinor            BigInt                   @map("amount_minor")
+    currency               Char(3)
+    amountReceivedMinor    BigInt?                  @map("amount_received_minor")
+    status                 pg.enum(PaymentStatus)   @default("initiated")
+    channel                String?
+    checkoutUrl            String?                  @map("checkout_url")
+    failureReason          String?                  @map("failure_reason")
+    expiresAt              TimestamptzString?       @map("expires_at")
+    paidAt                 TimestamptzString?       @map("paid_at")
+    lastReconciledAt       TimestamptzString?       @map("last_reconciled_at")
+    reconcileAttempts      Int                      @default(0) @map("reconcile_attempts")
+    metadata               Jsonb                    @default(json`{}`)
+    createdAt              TimestamptzString        @default(now()) @map("created_at")
+    updatedAt              TimestamptzString        @default(now()) @map("updated_at")
+    paymentStatusHistories PaymentStatusHistory[]
+    refunds                Refunds[]
+    order                  Orders                   @relation(fields: [orderId], references: [id], onDelete: Restrict, map: "payments_order_id_fkey")
+
+    @@unique([provider, providerReference], map: "payments_provider_reference_uniq")
+    @@index([idempotencyKey], map: "payments_idempotency_key_uniq", where: sql`(idempotency_key IS NOT NULL)`, unique: true)
+    @@index([orderId], map: "payments_one_success_per_order", where: sql`(status = 'succeeded'::payment_status)`, unique: true)
+    @@index([orderId], map: "payments_order_idx")
+    @@index([provider, providerTransactionId], map: "payments_provider_txn_uniq", where: sql`(provider_transaction_id IS NOT NULL)`, unique: true)
+    @@index([createdAt], map: "payments_unresolved_idx", where: sql`(status = ANY (ARRAY['initiated'::payment_status, 'pending'::payment_status]))`)
+    @@check(expression: sql`(amount_minor > 0)`, map: "payments_amount_minor_check")
+    @@check(expression: sql`(amount_received_minor >= 0)`, map: "payments_amount_received_minor_check")
+    @@check(expression: sql`((currency)::text = upper((currency)::text))`, map: "payments_currency_check")
+    @@check(expression: sql`((status = ANY (ARRAY['succeeded'::payment_status, 'refunded'::payment_status, 'partially_refunded'::payment_status])) = (paid_at IS NOT NULL))`, map: "payments_paid_at_matches_status")
+    @@check(expression: sql`(reconcile_attempts >= 0)`, map: "payments_reconcile_attempts_check")
+    @@map("payments")
+  }
+
+  model WebhookEvents {
+    id                     Uuid                     @id(map: "webhook_events_pkey") @default(sql`gen_random_uuid()`)
+    provider               pg.enum(PaymentProvider)
+    eventId                String                   @map("event_id")
+    eventType              String                   @map("event_type")
+    signatureValid         Boolean                  @map("signature_valid")
+    payload                Jsonb
+    status                 pg.enum(WebhookStatus)   @default("received")
+    attempts               Int                      @default(0)
+    error                  String?
+    receivedAt             TimestamptzString        @default(now()) @map("received_at")
+    processedAt            TimestamptzString?       @map("processed_at")
+    paymentStatusHistories PaymentStatusHistory[]
+
+    @@unique([provider, eventId], map: "webhook_events_provider_event_uniq")
+    @@index([receivedAt], map: "webhook_events_status_idx", where: sql`(status = ANY (ARRAY['received'::webhook_status, 'failed'::webhook_status]))`)
+    @@check(expression: sql`(attempts >= 0)`, map: "webhook_events_attempts_check")
+    @@map("webhook_events")
+  }
+
+  model PaymentStatusHistory {
+    id             Uuid                    @id(map: "payment_status_history_pkey") @default(sql`gen_random_uuid()`)
+    paymentId      Uuid                    @map("payment_id")
+    fromStatus     pg.enum(PaymentStatus)? @map("from_status")
+    toStatus       pg.enum(PaymentStatus)  @map("to_status")
+    source         pg.enum(StatusSource)
+    webhookEventId Uuid?                   @map("webhook_event_id")
+    note           String?
+    createdAt      TimestamptzString       @default(now()) @map("created_at")
+    payment        Payments                @relation(fields: [paymentId], references: [id], onDelete: Cascade, map: "payment_status_history_payment_id_fkey", index: "payment_status_history_payment_idx")
+    webhookEvent   WebhookEvents?          @relation(fields: [webhookEventId], references: [id], onDelete: SetNull, map: "payment_status_history_webhook_event_id_fkey", index: false)
+
+    @@index([paymentId, createdAt], map: "payment_status_history_payment_idx")
+    @@map("payment_status_history")
+  }
+
+  model Refunds {
+    id               Uuid                  @id(map: "refunds_pkey") @default(sql`gen_random_uuid()`)
+    paymentId        Uuid                  @map("payment_id")
+    providerRefundId String?               @map("provider_refund_id")
+    amountMinor      BigInt                @map("amount_minor")
+    currency         Char(3)
+    status           pg.enum(RefundStatus) @default("pending")
+    reason           String?
+    createdAt        TimestamptzString     @default(now()) @map("created_at")
+    updatedAt        TimestamptzString     @default(now()) @map("updated_at")
+    payment          Payments              @relation(fields: [paymentId], references: [id], onDelete: Restrict, map: "refunds_payment_id_fkey")
+
+    @@index([paymentId], map: "refunds_payment_idx")
+    @@index([paymentId, providerRefundId], map: "refunds_provider_refund_uniq", where: sql`(provider_refund_id IS NOT NULL)`, unique: true)
+    @@check(expression: sql`(amount_minor > 0)`, map: "refunds_amount_minor_check")
+    @@check(expression: sql`((currency)::text = upper((currency)::text))`, map: "refunds_currency_check")
+    @@map("refunds")
+  }
+
+  native_enum OrderStatus {
+    pending = "pending"
+    paid = "paid"
+    failed = "failed"
+    cancelled = "cancelled"
+    partially_refunded = "partially_refunded"
+    refunded = "refunded"
+    @@map("order_status")
+  }
+
+  native_enum PaymentProvider {
+    stripe = "stripe"
+    paystack = "paystack"
+    flutterwave = "flutterwave"
+    @@map("payment_provider")
+  }
+
+  native_enum PaymentStatus {
+    initiated = "initiated"
+    pending = "pending"
+    succeeded = "succeeded"
+    failed = "failed"
+    abandoned = "abandoned"
+    refunded = "refunded"
+    partially_refunded = "partially_refunded"
+    @@map("payment_status")
+  }
+
+  native_enum RefundStatus {
+    pending = "pending"
+    succeeded = "succeeded"
+    failed = "failed"
+    @@map("refund_status")
+  }
+
+  native_enum StatusSource {
+    api = "api"
+    webhook = "webhook"
+    reconciliation = "reconciliation"
+    manual = "manual"
+    @@map("status_source")
+  }
+
+  native_enum WebhookStatus {
+    received = "received"
+    processed = "processed"
+    ignored = "ignored"
+    failed = "failed"
+    @@map("webhook_status")
+  }
+}
