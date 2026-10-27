@@ -67,6 +67,9 @@ CREATE TABLE orders (
   reference       text NOT NULL UNIQUE,            -- public order number, e.g. ORD-20261026-0001
   customer_email  text NOT NULL,
   customer_name   text,
+  external_customer_id text,
+  public_token    text NOT NULL UNIQUE,
+  description     text,
   amount_minor    bigint NOT NULL CHECK (amount_minor > 0),
   currency        char(3) NOT NULL CHECK (currency = upper(currency)),
   status          order_status NOT NULL DEFAULT 'pending',
@@ -83,6 +86,7 @@ CREATE TABLE orders (
 
 CREATE INDEX orders_status_created_idx ON orders (status, created_at DESC);
 CREATE INDEX orders_customer_email_idx ON orders (customer_email);
+CREATE INDEX orders_external_customer_idx ON orders (external_customer_id);
 
 CREATE TRIGGER orders_set_updated_at
   BEFORE UPDATE ON orders

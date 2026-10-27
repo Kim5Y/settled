@@ -69,6 +69,20 @@
                   "kind": "scalar"
                 }
               },
+              "description": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalCustomerId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -87,6 +101,13 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "publicToken": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
@@ -149,6 +170,12 @@
                 "customerName": {
                   "column": "customer_name"
                 },
+                "description": {
+                  "column": "description"
+                },
+                "externalCustomerId": {
+                  "column": "external_customer_id"
+                },
                 "id": {
                   "column": "id"
                 },
@@ -157,6 +184,9 @@
                 },
                 "paidAt": {
                   "column": "paid_at"
+                },
+                "publicToken": {
+                  "column": "public_token"
                 },
                 "reference": {
                   "column": "reference"
@@ -961,6 +991,16 @@
                   "dataType": "pg/text",
                   "nullable": true
                 },
+                "description": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "external_customer_id": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "dataType": "pg/uuid",
@@ -983,6 +1023,11 @@
                   "codecId": "pg/timestamptz-string@1",
                   "dataType": "pg/timestamptz",
                   "nullable": true
+                },
+                "public_token": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
                 },
                 "reference": {
                   "codecId": "pg/text@1",
@@ -1028,6 +1073,13 @@
                 },
                 {
                   "columns": [
+                    "external_customer_id"
+                  ],
+                  "name": "orders_external_customer_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
                     "status",
                     "created_at"
                   ],
@@ -1042,6 +1094,12 @@
                 "name": "orders_pkey"
               },
               "uniques": [
+                {
+                  "columns": [
+                    "public_token"
+                  ],
+                  "name": "orders_public_token_key"
+                },
                 {
                   "columns": [
                     "reference"
@@ -1763,7 +1821,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "193957919201aba09101dcf1d20cfc3f957d1d17ee97b2ae7ea6605f2eced6ec"
+    "storageHash": "ac97c03222a0a5651d6860fd7419a8ed03443bc92f83366cce2f18769db10993"
   },
   "capabilities": {
     "postgres": {

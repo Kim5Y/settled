@@ -1,22 +1,25 @@
 // use prisma-8
 // Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.
-
 namespace public {
   model Orders {
-    id            Uuid                 @id(map: "orders_pkey") @default(sql`gen_random_uuid()`)
-    reference     String               @unique(map: "orders_reference_key")
-    customerEmail String               @map("customer_email")
-    customerName  String?              @map("customer_name")
-    amountMinor   BigInt               @map("amount_minor")
-    currency      Char(3)
-    status        pg.enum(OrderStatus) @default("pending")
-    paidAt        TimestamptzString?   @map("paid_at")
-    metadata      Jsonb                @default(json`{}`)
-    createdAt     TimestamptzString    @default(now()) @map("created_at")
-    updatedAt     TimestamptzString    @default(now()) @map("updated_at")
-    payments      Payments[]
+    id                 Uuid                 @id(map: "orders_pkey") @default(sql`gen_random_uuid()`)
+    reference          String               @unique(map: "orders_reference_key")
+    customerEmail      String               @map("customer_email")
+    customerName       String?              @map("customer_name")
+    externalCustomerId String?              @map("external_customer_id")
+    publicToken        String               @unique(map: "orders_public_token_key") @map("public_token")
+    description        String?
+    amountMinor        BigInt               @map("amount_minor")
+    currency           Char(3)
+    status             pg.enum(OrderStatus) @default("pending")
+    paidAt             TimestamptzString?   @map("paid_at")
+    metadata           Jsonb                @default(json`{}`)
+    createdAt          TimestamptzString    @default(now()) @map("created_at")
+    updatedAt          TimestamptzString    @default(now()) @map("updated_at")
+    payments           Payments[]
 
     @@index([customerEmail], map: "orders_customer_email_idx")
+    @@index([externalCustomerId], map: "orders_external_customer_idx")
     @@index([status, createdAt], map: "orders_status_created_idx")
     @@check(expression: sql`(amount_minor > 0)`, map: "orders_amount_minor_check")
     @@check(expression: sql`((currency)::text = upper((currency)::text))`, map: "orders_currency_check")
@@ -125,6 +128,7 @@ namespace public {
     cancelled = "cancelled"
     partially_refunded = "partially_refunded"
     refunded = "refunded"
+
     @@map("order_status")
   }
 
@@ -132,6 +136,7 @@ namespace public {
     stripe = "stripe"
     paystack = "paystack"
     flutterwave = "flutterwave"
+
     @@map("payment_provider")
   }
 
@@ -143,6 +148,7 @@ namespace public {
     abandoned = "abandoned"
     refunded = "refunded"
     partially_refunded = "partially_refunded"
+
     @@map("payment_status")
   }
 
@@ -150,6 +156,7 @@ namespace public {
     pending = "pending"
     succeeded = "succeeded"
     failed = "failed"
+
     @@map("refund_status")
   }
 
@@ -158,6 +165,7 @@ namespace public {
     webhook = "webhook"
     reconciliation = "reconciliation"
     manual = "manual"
+
     @@map("status_source")
   }
 
@@ -166,6 +174,7 @@ namespace public {
     processed = "processed"
     ignored = "ignored"
     failed = "failed"
+
     @@map("webhook_status")
   }
 }

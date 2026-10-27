@@ -4,6 +4,7 @@
     "node_modules",
     "test",
     "dist",
+    "migrations",
     "**/*spec.ts",
     "prisma.config.ts"
   ]
